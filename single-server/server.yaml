@@ -102,7 +102,12 @@ resources:
 
   floating_ip:
     type: OS::Neutron::FloatingIP
-    depends_on: [ port ]
+    depends_on: [ port, router_subnet_connect ]
     properties:
       floating_network: { get_param: public_network }
       port_id: { get_resource: port }
+
+outputs:
+  public_ip:
+    description: The floating IP assigned to the deployed instance
+    value: { get_attr: [ floating_ip, floating_ip_address ] }
