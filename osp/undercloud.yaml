@@ -1,0 +1,158 @@
+heat_template_version: 2016-04-08
+
+#
+# you can deploy this template using the following command:
+# 'openstack stack create -t server.yaml -e env.yaml <Stack Name>'
+#
+
+description: Undercloud server deployment
+
+parameters:
+  public_network:
+    type: string
+    constraints:
+      - custom_constraint: neutron.network
+  undercloud_flavor:
+    type: string
+    constraints:
+      - custom_constraint: nova.flavor
+  undercloud_image:
+    type: string
+    constraints:
+      - custom_constraint: glance.image
+  undercloud_ctlplane_ip:
+    type: string
+    default: 192.0.2.1
+    constraints:
+      - custom_constraint: ip_addr
+  ssh_keys:
+    type: comma_delimited_list
+  ctlplane_cidr:
+    type: string
+    default: 192.0.2.0/24
+    constraints:
+      - custom_constraint: net_cidr
+  ctlplane_gateway_ip:
+    type: string
+    default: ""
+
+resources:
+
+  ctlplane_net:
+    type: OS::Neutron::Net
+    properties: 
+      name:
+        list_join: [ '-', [ { get_param: "OS::stack_name" }, 'ctlplane' ]]
+      port_security_enabled: False
+
+  ctlplane_subnet:
+    type: OS::Neutron::Subnet
+    depends_on: [ ctlplane_net ]
+    properties:
+      name: 
+        list_join: [ '-', [ { get_param: "OS::stack_name" }, 'ctlplane' ]]
+      network: { get_resource: ctlplane_net }
+      enable_dhcp: False
+      ip_version: 4
+      cidr: { get_param: ctlplane_cidr }
+      gateway_ip: { get_param: ctlplane_gateway_ip }
+
+  access_net:
+    type: OS::Neutron::Net
+    properties: 
+      name:
+        list_join: [ '-', [ { get_param: "OS::stack_name" }, 'access' ]]
+
+  access_subnet:
+    type: OS::Neutron::Subnet
+    depends_on: [ access_net ]
+    properties:
+      name: 
+        list_join: [ '-', [ { get_param: "OS::stack_name" }, 'access' ]]
+      network: { get_resource: access_net }
+      ip_version: 4
+      cidr: 192.168.1.0/24
+      allocation_pools:
+      - { start: 192.168.1.10, end: 192.168.1.250 }
+
+  access_router:
+    type: OS::Neutron::Router
+    properties:
+      external_gateway_info: {"network": { get_param: public_network }}
+
+  access_router_connect:
+    type: OS::Neutron::RouterInterface
+    depends_on: [ access_subnet, access_router ]
+    properties:
+      router: { get_resource: access_router }
+      subnet: { get_resource: access_subnet }
+
+  undercloud_access:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      description: allow access to undercloud from the public network
+      name: 
+        list_join: [ '-', [ { get_param: "OS::stack_name" }, 'undercloud-access']]
+      rules: 
+        - { direction: ingress, remote_ip_prefix: 0.0.0.0/0, port_range_min: 22, port_range_max: 22, protocol: tcp } 
+        - { direction: ingress, remote_ip_prefix: 0.0.0.0/0, port_range_min: 80, port_range_max: 80, protocol: tcp } 
+        - { direction: ingress, remote_ip_prefix: 0.0.0.0/0, port_range_min: 443, port_range_max: 443, protocol: tcp } 
+        - { direction: ingress, remote_ip_prefix: 0.0.0.0/0, protocol: icmp }
+
+  user_stack_config:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        users:
+          - name: stack
+            gecos: Undercloud Administrator
+            sudo: ALL=(ALL) NOPASSWD:ALL
+            shell: /bin/bash
+            lock-passwd: false
+            ssh-authorized-keys: { get_param: ssh_keys }  
+
+  undercloud_ctlplane_port:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_resource: ctlplane_net }
+      fixed_ips:
+        - ip_address: { get_param: undercloud_ctlplane_ip }
+
+  undercloud_access_port:
+    type: OS::Neutron::Port
+    depends_on: [ undercloud_access ]
+    properties:
+      network: { get_resource: access_net }
+      security_groups: [ get_resource: undercloud_access ]
+
+  undercloud_access_ip:
+    type: OS::Neutron::FloatingIP
+    depends_on: [ undercloud_access_port, access_router_connect ]
+    properties:
+      floating_network: { get_param: public_network }
+      port_id: { get_resource: undercloud_access_port }
+
+  undercloud_init:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+        - config: { get_resource: user_stack_config }
+    
+  undercloud:
+    type: OS::Nova::Server
+    depends_on: [ undercloud_init, undercloud_access_port ]
+    properties:
+      name: 
+        list_join: [ '-', [ { get_param: "OS::stack_name" }, 'undercloud' ]]
+      user_data_format: RAW
+      user_data: { get_resource: undercloud_init }    
+      image: { get_param: undercloud_image }
+      flavor: { get_param: undercloud_flavor } 
+      networks:
+        - port: { get_resource: undercloud_access_port }
+        - port: { get_resource: undercloud_ctlplane_port }
+
+outputs:
+  undercloud_ip:
+    description: The floating IP assigned to the undercloud instance
+    value: { get_attr: [ undercloud_access_ip, floating_ip_address ] }
