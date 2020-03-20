@@ -1,0 +1,14 @@
+---
+- hosts: localhost
+  tasks:
+    - name: create stack
+      register: stack_create
+      os_stack:
+        name: bre-rhel8
+        state: present
+        template: "../single-server/server.yaml"
+        environment:
+          - "../single-server/env.yaml"
+        parameters:
+          flavor: undercloud
+          image: rhel-8.1

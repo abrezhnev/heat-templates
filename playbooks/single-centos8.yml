@@ -1,0 +1,14 @@
+---
+- hosts: localhost
+  tasks:
+    - name: create stack
+      register: stack_create
+      os_stack:
+        name: bre-centos8
+        state: present
+        template: "../single-server/server.yaml"
+        environment:
+          - "../single-server/env.yaml"
+        parameters:
+          flavor: undercloud
+          image: CentOS-8-GenericCloud-8.1.1911
