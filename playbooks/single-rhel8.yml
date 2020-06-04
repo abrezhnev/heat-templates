@@ -8,7 +8,7 @@
         state: present
         template: "../single-server/server.yaml"
         environment:
-          - "../single-server/env.yaml"
+          - "../environments/env.yaml"
         parameters:
-          flavor: undercloud
+          flavor: 4c16g100d
           image: rhel-8.1

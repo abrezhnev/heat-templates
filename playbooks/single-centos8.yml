@@ -8,7 +8,7 @@
         state: present
         template: "../single-server/server.yaml"
         environment:
-          - "../single-server/env.yaml"
+          - "../environments/centos-8.yaml"
         parameters:
-          flavor: undercloud
-          image: CentOS-8-GenericCloud-8.1.1911
+          flavor: m1.small
+          image: CentOS-8.1.1911
