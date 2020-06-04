@@ -6,7 +6,7 @@
       os_stack:
         name: bre-rhel8
         state: present
-        template: "../templates/server.yaml"
+        template: "../templates/single-server.yaml"
         environment:
           - "../environments/env.yaml"
         parameters:
