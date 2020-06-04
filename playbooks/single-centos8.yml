@@ -6,7 +6,7 @@
       os_stack:
         name: bre-centos8
         state: present
-        template: "../single-server/server.yaml"
+        template: "../templates/server.yaml"
         environment:
           - "../environments/centos-8.yaml"
         parameters:
