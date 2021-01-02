@@ -10,5 +10,5 @@
         environment:
           - "../environments/env.yaml"
         parameters:
-          flavor: 4c16g100d
-          image: rhel-8.1
+          flavor: GLOBAL-CPU_4_Memory_16384_Disk_150_flavor
+          image: rhel-8.2
